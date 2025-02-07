@@ -1,0 +1,159 @@
+#----------------------------------------------------------------
+# General simulation parameters
+
+Continue previous simulation: 1
+Number of spatial dimensions: 3
+Number of time steps: 1000
+Time step size: 0.1 # ms
+Spectral radius of infinite time step: 0.50
+Searched file name to trigger stop: STOP_SIM
+
+Save results to VTK format: 1
+Name prefix of saved VTK files: result
+Increment in saving VTK files: 25
+Start saving after time step: 1
+
+Increment in saving restart files: 5000
+Convert BIN to VTK format: 0
+
+Verbose: 1
+Warning: 0
+Debug: 0
+
+#----------------------------------------------------------------
+# Mesh data
+# shoud be mm
+# Load Purkinje network
+Add mesh: pfib_fc {
+   # Purkinje network is loaded as a 1D fiber mesh
+   Set mesh as fibers: t
+
+   Mesh file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/purkinje-fine/endo_finest.vtu
+   Add face: fc_epi {
+     End nodes face file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/purkinje-fine/endo_finest_ien-picked-more.txt
+   }
+   # We need to provide domains to specifiy properties for solving
+   # the equation. For e.g., fluid density and viscosity should be
+   # provided for fluid, material properties for solid, etc. For
+   # electrophysiology, we need to provide information on whether
+   # the individual cell is a pacemaker cell or a regular myocyte.
+   # This domain information needs to provided here. 
+
+   # The file below is an ASCII file with number of lines the same
+   # as the number of elements. Each line will idenfity the domain
+   # number.
+   Domain file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/purkinje-fine/domain_pk.dat
+
+   # If there is only one uniform domain, a constant value may be
+   # provided as,
+   # # Domain: 0. 
+
+   # If there are many domains, a vtu file may also be provided
+   # with an element-based variable "DOMAIN_ID"
+   # # Domain file path: mesh/multiple-domains.vtu
+
+   # Scaling factor for the mesh
+   Mesh scale factor: 10 # cm
+}
+
+Add mesh: msh {
+   Mesh file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/mesh/solid-mesh-complete/mesh-complete.mesh.vtu
+   Add face: endo {
+      Face file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/mesh/solid-mesh-complete/mesh-surfaces/wall_inner.vtp
+   }
+   Add face: start {
+      Face file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/mesh/solid-mesh-complete/mesh-surfaces/wall_inlet.vtp
+   }
+   Add face: end {
+      Face file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/mesh/solid-mesh-complete/mesh-surfaces/wall_outlet.vtp
+   }
+   Add face: epi {
+      Face file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/mesh/solid-mesh-complete/mesh-surfaces/wall_outer.vtp
+   }
+
+   Fiber direction file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/mesh/solid-mesh-complete/fibersUp30.vtu
+   Fiber direction file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/mesh/solid-mesh-complete/fibersCir30.vtu
+
+   Domain file path: /scratch/users/zinanhu/FontanConduit_mustbefinal/00-mesh-short-finest/mesh/solid-mesh-complete/domain_electro_pk.dat
+   
+   Mesh scale factor: 10
+}
+
+Add projection: fc_epi {
+   Project from face: epi
+   Projection tolerance: -1
+}
+
+#----------------------------------------------------------------
+# Equations
+Add equation: CEP {
+   Coupled: 1
+
+   # Parameters for the nonlinear (Newton) solver
+   Min iterations: 1
+   Max iterations: 3
+   Tolerance: 1e-6
+
+   # Domain 1 consists of regular conducting myocytes
+   Domain: 2 {
+      # We use tenTusscher-Panfilov model
+      Electrophysiology model: TTP
+
+      Myocardial zone: pfib
+
+      # Isotropic conductivity
+      Conductivity (iso): 1.14 #0.65
+      #Conductivity (ani): 1.95 #1.95
+      # Time integrator
+      ODE solver: RK
+   }
+
+   # Domain 2 comprises pacemaker cells which need
+   # information on external stimulus
+   # the time scale in electrophysics is in ms
+   Domain: 1 {
+      # We use tenTusscher-Panfilov model
+      Electrophysiology model: TTP
+
+      Myocardial zone: pfib
+
+      # Isotropic conductivity
+      Conductivity (iso): 1.14 # mm/ms
+      #Conductivity (ani): 1.95 # mm/ms
+
+      # Time integrator
+      ODE solver: RK
+
+      # Details of external stimulus
+      Stimulus: Istim {
+         Amplitude: -52.0
+         Start time: 0.0
+         Duration: 2 # ms
+#         Cycle length: 1000.0 #ms
+      }
+   }
+   
+   Domain: 4 {
+      # choose to be 0.225 of purkinje CV based on literature value
+      # too fast with 0.225, use 0.1 instead
+      Electrophysiology model: TTP
+      Myocardial zone: myocardium
+      Conductivity (iso): 0.0193  #0.147
+      Conductivity (ani): 0.058  #0.440
+      ODE solver: RK
+   }
+
+   # Output variables for visualization
+   Output: Spatial {
+      Action_potential: t
+   }
+
+   # Linear solver parameters
+   LS type: GMRES
+   {
+      Max iterations:      100
+      Tolerance:           1D-6
+      Krylov space dimension: 50
+   }
+}
+
